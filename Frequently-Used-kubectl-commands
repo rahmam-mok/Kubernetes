@@ -1,0 +1,62 @@
+ Here's a list of commonly used Kubernetes (kubectl) commands along with brief descriptions and examples:
+
+1. **View Cluster Information:**
+   - `kubectl cluster-info`: Display addresses of the master and services.
+   - `kubectl get nodes`: List all nodes in the cluster.
+
+2. **Pods:**
+   - `kubectl get pods`: List all pods in the current namespace.
+   - `kubectl describe pod <pod-name>`: Show detailed information about a specific pod.
+   - `kubectl logs <pod-name>`: Display logs of a specific pod.
+
+3. **Deployments:**
+   - `kubectl get deployments`: List all deployments in the current namespace.
+   - `kubectl describe deployment <deployment-name>`: Show details about a specific deployment.
+
+4. **Services:**
+   - `kubectl get services`: List all services in the current namespace.
+   - `kubectl describe service <service-name>`: Show details about a specific service.
+
+5. **ReplicaSets:**
+   - `kubectl get replicasets`: List all ReplicaSets in the current namespace.
+
+6. **Namespaces:**
+   - `kubectl get namespaces`: List all namespaces.
+   - `kubectl create namespace <namespace-name>`: Create a new namespace.
+   - `kubectl get pods --namespace=<namespace-name>`: List pods in a specific namespace.
+
+7. **Scaling:**
+   - `kubectl scale deployment <deployment-name> --replicas=<number>`: Scale the number of replicas in a deployment.
+
+8. **Delete Resources:**
+   - `kubectl delete pod <pod-name>`: Delete a specific pod.
+   - `kubectl delete deployment <deployment-name>`: Delete a specific deployment.
+
+9. **Interacting with Pods:**
+   - `kubectl exec -it <pod-name> -- /bin/sh`: Open an interactive shell inside a running pod.
+   - `kubectl port-forward <pod-name> <local-port>:<pod-port>`: Forward ports to a pod.
+
+10. **Config Maps and Secrets:**
+    - `kubectl get configmaps`: List all ConfigMaps.
+    - `kubectl get secrets`: List all secrets.
+
+11. **Apply Configuration:**
+    - `kubectl apply -f <filename.yaml>`: Apply a configuration file.
+    - `kubectl apply -f <directory>`: Apply configurations in a directory.
+
+12. **Role-based Access Control (RBAC):**
+    - `kubectl get roles`: List all roles.
+    - `kubectl get rolebindings`: List all role bindings.
+
+13. **Custom Resource Definitions (CRDs):**
+    - `kubectl get crd`: List all custom resource definitions.
+
+14. **Context and Switching Contexts:**
+    - `kubectl config get-contexts`: List all contexts.
+    - `kubectl config use-context <context-name>`: Switch to a different context.
+
+15. **Helm (Package Manager):**
+    - `helm install <chart>`: Install a Helm chart.
+    - `helm ls`: List Helm releases.
+
+These are just a few examples, and there are many more kubectl commands and options available. You can explore more details and options in the [official documentation](https://kubernetes.io/docs/reference/kubectl/overview/).
