@@ -1,0 +1,246 @@
+Certainly! Below is a Helm chart example that deploys a Java Spring Boot application on different AKS clusters with separate namespaces for each environment, along with Ingress and TLS configuration. Additionally, it includes specific namespace parameters and an example of how to scale vertically by adjusting resource specifications:
+
+1. Start by creating a new Helm chart for your Spring Boot application:
+
+```bash
+helm create myjavaapp
+cd myjavaapp
+```
+
+2. Organize your project structure:
+
+```plaintext
+myjavaapp/
+|-- charts/
+|-- templates/
+|   |-- deployment.yaml
+|   |-- service.yaml
+|   |-- ingress.yaml
+|-- values.yaml
+|-- Chart.yaml
+```
+
+3. Update the `values.yaml` file with configurable parameters for your application, including namespace details and initial resource specifications:
+
+```yaml
+# values.yaml
+image:
+  repository: your-docker-registry/myjavaapp
+  tag: latest
+
+replicaCount: 1
+
+namespace:
+  enabled: true
+  name: myjavaapp-dev
+
+ingress:
+  enabled: true
+  hosts:
+    - host: your-app-dev.domain
+      paths:
+        - /
+  tls:
+    - secretName: your-app-tls-dev
+      hosts:
+        - your-app-dev.domain
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+```
+
+4. Create separate `values-fqt.yaml`, `values-uat.yaml`, `values-stage.yaml`, and `values-prod.yaml` files for each environment with environment-specific configurations:
+
+```yaml
+# values-fqt.yaml
+namespace:
+  enabled: true
+  name: myjavaapp-fqt
+# Add other environment-specific configurations
+
+# Repeat for other environments
+```
+
+5. Modify the `templates/deployment.yaml` file to use these values and include resource specifications:
+
+```yaml
+# templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "myjavaapp.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "myjavaapp.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "{{ .Values.resources.requests.memory }}"
+              cpu: "{{ .Values.resources.requests.cpu }}"
+            limits:
+              memory: "{{ .Values.resources.limits.memory }}"
+              cpu: "{{ .Values.resources.limits.cpu }}"
+```
+
+6. Modify the `templates/service.yaml` file:
+
+```yaml
+# templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  selector:
+    app: {{ include "myjavaapp.name" . }}
+    release: {{ .Release.Name }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+```
+
+7. Add the `templates/ingress.yaml` file:
+
+```yaml
+# templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+    - host: {{ index .Values.ingress.hosts 0 }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "myjavaapp.fullname" . }}
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - {{ index .Values.ingress.tls.hosts 0 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+```
+
+8. Install the Helm chart for each environment:
+
+```bash
+# For Dev
+helm install myjavaapp-dev ./myjavaapp -f values.yaml
+
+# For FQT
+helm install myjavaapp-fqt ./myjavaapp -f values-fqt.yaml
+
+# For UAT
+helm install myjavaapp-uat ./myjavaapp -f values-uat.yaml
+
+# For Stage
+helm install myjavaapp-stage ./myjavaapp -f values-stage.yaml
+
+# For Prod
+helm install myjavaapp-prod ./myjavaapp -f values-prod.yaml
+```
+
+9. To upgrade the charts:
+
+```bash
+# For Dev
+helm upgrade myjavaapp-dev ./myjavaapp -f values.yaml
+
+# Repeat for other environments
+```
+
+Ensure you have configured your AKS clusters, namespaces, and Ingress controllers accordingly for each environment. Adjust the configurations as needed for your specific setup and requirements.
+
+
+Scaling an application vertically involves adjusting the resources (CPU, memory) allocated to each instance of the application rather than increasing the number of instances (horizontal scaling). Here are the general steps to vertically scale an application:
+
+1. **Identify Resource Requirements:**
+   - Analyze your application's resource usage (CPU and memory) under different loads to understand its requirements.
+
+2. **Update Container Resources:**
+   - In Kubernetes, you can vertically scale your application by adjusting the resource requests and limits for the containers within your pods. This is typically done in the container specifications of your Deployment or Pod configuration.
+
+   Example (part of a Pod or Deployment configuration in a YAML file):
+   ```yaml
+   containers:
+   - name: your-container
+     image: your-image
+     resources:
+       requests:
+         memory: "64Mi"
+         cpu: "250m"
+       limits:
+         memory: "128Mi"
+         cpu: "500m"
+   ```
+
+   In this example, you can adjust the `memory` and `cpu` values based on your application's requirements.
+
+3. **Apply Changes:**
+   - After updating the resource specifications, you can apply the changes to your Kubernetes cluster using the `kubectl apply` command or by redeploying your application.
+
+   Example:
+   ```bash
+   kubectl apply -f your-updated-configuration.yaml
+   ```
+
+4. **Monitor and Fine-Tune:**
+   - Monitor your application's performance, resource usage, and overall health after the update.
+   - Adjust the resource specifications iteratively based on the observed behavior and performance metrics.
+
+   Example:
+   ```bash
+   kubectl get pods
+   kubectl describe pod your-pod-name
+   ```
+
+5. **Consider Autoscaling:**
+   - Kubernetes provides Horizontal Pod Autoscaling (HPA) for automatically adjusting the number of replicas based on observed metrics. While not strictly vertical scaling, it can help you manage the number of instances based on demand.
+
+   Example (autoscaling based on CPU usage):
+   ```yaml
+   apiVersion: autoscaling/v1
+   kind: HorizontalPodAutoscaler
+   metadata:
+     name: your-hpa
+   spec:
+     scaleTargetRef:
+       apiVersion: apps/v1
+       kind: Deployment
+       name: your-deployment
+     minReplicas: 1
+     maxReplicas: 5
+     targetCPUUtilizationPercentage: 50
+   ```
+
+   Here, the `targetCPUUtilizationPercentage` is set to 50%, and the HPA will adjust the number of replicas based on CPU usage.
+
+Remember that vertical scaling has limits, and beyond a certain point, it may be more cost-effective and efficient to explore horizontal scaling or other optimization strategies.
