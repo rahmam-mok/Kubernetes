@@ -1,0 +1,148 @@
+Certainly! Here's an extended example that includes Ingress configuration with TLS for deploying a Java Spring Boot application in multiple environments (dev, fqt, uat, stage, prod) on different AKS clusters, each having its own namespace:
+
+1. Start by creating a new Helm chart for your Spring Boot application:
+
+```bash
+helm create myjavaapp
+cd myjavaapp
+```
+
+2. Organize your project structure:
+
+```plaintext
+myjavaapp/
+|-- charts/
+|-- templates/
+|   |-- deployment.yaml
+|   |-- service.yaml
+|   |-- ingress.yaml
+|-- values.yaml
+|-- Chart.yaml
+```
+
+3. Update the `values.yaml` file with configurable parameters for your application. Add TLS and Ingress configurations:
+
+```yaml
+# values.yaml
+image:
+  repository: your-docker-registry/myjavaapp
+  tag: latest
+
+replicaCount: 3
+
+ingress:
+  enabled: true
+  hosts:
+    - host: your-app.dev
+      paths:
+        - /
+  tls:
+    - secretName: your-app-tls
+      hosts:
+        - your-app.dev
+```
+
+4. Create separate `values-dev.yaml`, `values-fqt.yaml`, `values-uat.yaml`, `values-stage.yaml`, and `values-prod.yaml` files for each environment with environment-specific configurations.
+
+5. Modify the `templates/deployment.yaml` file to use these values:
+
+```yaml
+# templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "myjavaapp.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "myjavaapp.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+```
+
+6. Modify the `templates/service.yaml` file:
+
+```yaml
+# templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+spec:
+  selector:
+    app: {{ include "myjavaapp.name" . }}
+    release: {{ .Release.Name }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+```
+
+7. Add the `templates/ingress.yaml` file:
+
+```yaml
+# templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+    - host: {{ index .Values.ingress.hosts 0 }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "myjavaapp.fullname" . }}
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - {{ index .Values.ingress.tls.hosts 0 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+```
+
+8. Install the Helm chart for each environment:
+
+```bash
+# For Dev
+helm install myjavaapp-dev ./myjavaapp -f values-dev.yaml
+
+# For FQT
+helm install myjavaapp-fqt ./myjavaapp -f values-fqt.yaml
+
+# For UAT
+helm install myjavaapp-uat ./myjavaapp -f values-uat.yaml
+
+# For Stage
+helm install myjavaapp-stage ./myjavaapp -f values-stage.yaml
+
+# For Prod
+helm install myjavaapp-prod ./myjavaapp -f values-prod.yaml
+```
+
+9. To upgrade the charts:
+
+```bash
+# For Dev
+helm upgrade myjavaapp-dev ./myjavaapp -f values-dev.yaml
+
+# Repeat for other environments
+```
+
+Ensure you have configured your AKS clusters and namespaces accordingly for each environment. Adjust the configurations as needed for your specific setup and requirements.
