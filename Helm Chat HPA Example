@@ -1,0 +1,118 @@
+To add Horizontal Pod Autoscaler (HPA) configuration in a Helm chart, you typically create a separate file in the `templates` directory, such as `hpa.yaml`, and reference it in your main Helm chart file (`values.yaml` or another specific environment file).
+
+Here's a basic example:
+
+1. Create an `hpa.yaml` file in the `templates` directory:
+
+```yaml
+# templates/hpa.yaml
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "myjavaapp.fullname" . }}
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50
+```
+
+In this example, the HPA is configured to autoscale based on CPU utilization, with a target average utilization of 50%. Adjust the `minReplicas` and `maxReplicas` values based on your requirements.
+
+2. Reference the `hpa.yaml` file in your main Helm chart file (`values.yaml` or an environment-specific file):
+
+```yaml
+# values.yaml
+image:
+  repository: your-docker-registry/myjavaapp
+  tag: latest
+
+replicaCount: 1
+
+namespace:
+  enabled: true
+  name: myjavaapp-dev
+
+ingress:
+  enabled: true
+  hosts:
+    - host: your-app-dev.domain
+      paths:
+        - /
+  tls:
+    - secretName: your-app-tls-dev
+      hosts:
+        - your-app-dev.domain
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+
+# Add Horizontal Pod Autoscaler (HPA) configuration reference
+hpa:
+  enabled: true
+```
+
+3. Update your `templates/deployment.yaml` file to include the HPA reference:
+
+```yaml
+# templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "myjavaapp.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "myjavaapp.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "{{ .Values.resources.requests.memory }}"
+              cpu: "{{ .Values.resources.requests.cpu }}"
+            limits:
+              memory: "{{ .Values.resources.limits.memory }}"
+              cpu: "{{ .Values.resources.limits.cpu }}"
+---
+# Add Horizontal Pod Autoscaler (HPA) reference
+{{- if .Values.hpa.enabled }}
+{{- include "myjavaapp.hpa" . | nindent 2 }}
+{{- end }}
+```
+
+4. Install or upgrade your Helm chart, making sure to include the HPA configuration:
+
+```bash
+# For Dev
+helm install myjavaapp-dev ./myjavaapp -f values.yaml
+
+# Or upgrade
+helm upgrade myjavaapp-dev ./myjavaapp -f values.yaml
+```
+
+This example demonstrates how to include Horizontal Pod Autoscaler configuration in your Helm chart for autoscaling based on CPU utilization. Adjust the HPA configuration and other values according to your application's requirements.
