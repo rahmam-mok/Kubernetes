@@ -1,0 +1,213 @@
+Certainly! Below is an extended Helm chart example that deploys a Java Spring Boot application on different AKS clusters with separate namespaces for each environment. It includes Ingress configuration for HTTPS, TLS configuration, specific namespace parameters, and an example of how to scale vertically:
+
+1. Start by creating a new Helm chart for your Spring Boot application:
+
+```bash
+helm create myjavaapp
+cd myjavaapp
+```
+
+2. Organize your project structure:
+
+```plaintext
+myjavaapp/
+|-- charts/
+|-- templates/
+|   |-- deployment.yaml
+|   |-- service.yaml
+|   |-- ingress.yaml
+|   |-- hpa.yaml
+|-- values.yaml
+|-- Chart.yaml
+```
+
+3. Update the `values.yaml` file with configurable parameters for your application, including namespace details, initial resource specifications, and Ingress/TLS configurations:
+
+```yaml
+# values.yaml
+image:
+  repository: your-docker-registry/myjavaapp
+  tag: latest
+
+replicaCount: 1
+
+namespace:
+  enabled: true
+  name: myjavaapp-dev
+
+ingress:
+  enabled: true
+  hosts:
+    - host: your-app-dev.domain
+      paths:
+        - /
+  tls:
+    - secretName: your-app-tls-dev
+      hosts:
+        - your-app-dev.domain
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+
+# Horizontal Pod Autoscaler (HPA) configuration
+hpa:
+  enabled: true
+```
+
+4. Create separate `values-fqt.yaml`, `values-uat.yaml`, `values-stage.yaml`, and `values-prod.yaml` files for each environment with environment-specific configurations:
+
+```yaml
+# values-fqt.yaml
+namespace:
+  enabled: true
+  name: myjavaapp-fqt
+# Add other environment-specific configurations
+
+# Repeat for other environments
+```
+
+5. Create `templates/hpa.yaml` to configure Horizontal Pod Autoscaler:
+
+```yaml
+# templates/hpa.yaml
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "myjavaapp.fullname" . }}
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50
+```
+
+6. Update the `templates/deployment.yaml` file to include the HPA reference:
+
+```yaml
+# templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "myjavaapp.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "myjavaapp.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "{{ .Values.resources.requests.memory }}"
+              cpu: "{{ .Values.resources.requests.cpu }}"
+            limits:
+              memory: "{{ .Values.resources.limits.memory }}"
+              cpu: "{{ .Values.resources.limits.cpu }}"
+---
+# Add Horizontal Pod Autoscaler (HPA) reference
+{{- if .Values.hpa.enabled }}
+{{- include "myjavaapp.hpa" . | nindent 2 }}
+{{- end }}
+```
+
+7. Modify the `templates/service.yaml` file:
+
+```yaml
+# templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  selector:
+    app: {{ include "myjavaapp.name" . }}
+    release: {{ .Release.Name }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+```
+
+8. Add the `templates/ingress.yaml` file:
+
+```yaml
+# templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "myjavaapp.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+    - host: {{ index .Values.ingress.hosts 0 }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "myjavaapp.fullname" . }}
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - {{ index .Values.ingress.tls.hosts 0 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+```
+
+9. Install the Helm chart for each environment:
+
+```bash
+# For Dev
+helm install myjavaapp-dev ./myjavaapp -f values.yaml
+
+# For FQT
+helm install myjavaapp-fqt ./myjavaapp -f values-fqt.yaml
+
+# For UAT
+helm install myjavaapp-uat ./myjavaapp -f values-uat.yaml
+
+# For Stage
+helm install myjavaapp-stage ./myjavaapp -f values-stage.yaml
+
+# For Prod
+helm install myjavaapp-prod ./myjavaapp -f values-prod.yaml
+```
+
+10. To upgrade the charts:
+
+```bash
+# For Dev
+helm upgrade myjavaapp-dev ./myjavaapp -f values.yaml
+
+# Repeat for other environments
+```
+
+This example provides a Helm chart for deploying a Java Spring Boot application with specific configurations for each environment, Ingress for HTTPS, TLS, and Horizontal Pod Autoscaler (HPA) for vertical scaling. Adjust the configurations based on your application's requirements.
