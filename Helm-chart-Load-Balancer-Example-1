@@ -1,0 +1,98 @@
+Here's the Helm chart tailored for deploying a production-ready Java Spring Boot application named PFT on an AKS Kubernetes cluster with auto-scaling, a minimum of 2 replicas behind a load balancer, a maximum of 6 replicas, and SSL certificate configuration with an Ingress rule using the domain name pft.com:
+
+```yaml
+# Chart.yaml
+apiVersion: v2
+name: pft-app
+description: A Helm chart for deploying a production-ready Java Spring Boot application on AKS with auto-scaling and SSL
+version: 1.0.0
+appVersion: 1.0.0
+
+# values.yaml
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 80
+
+image:
+  repository: your-docker-registry/pft-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 443
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+  hosts:
+    - host: pft.com
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: {{ include "pft-app.fullname" . }}
+              port:
+                number: {{ .Values.service.port }}
+  tls:
+    - hosts:
+        - pft.com
+      secretName: pft-tls-secret
+
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pft-app.fullname" . }}
+  labels:
+    app: {{ include "pft-app.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "pft-app.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pft-app.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+      imagePullSecrets:
+        - name: your-docker-registry-secret
+
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pft-app.fullname" . }}
+  labels:
+    app: {{ include "pft-app.name" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ include "pft-app.name" . }}
+```
+
+Make sure to replace placeholders like `your-docker-registry` with your actual values. Ensure you have a Docker registry, TLS secret, and DNS configured accordingly.
