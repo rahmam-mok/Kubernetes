@@ -1,0 +1,122 @@
+Sure, here's an example of a Helm chart that deploys a Java Spring Boot application on an AKS Kubernetes cluster with auto-scaling, minimum 2 replicas behind a load balancer, and a maximum of 6 replicas. It also includes SSL certificate configuration:
+
+```yaml
+# Chart.yaml
+apiVersion: v2
+name: springboot-app
+description: A Helm chart for deploying a Java Spring Boot application on AKS with auto-scaling and SSL
+version: 1.0.0
+appVersion: 1.0.0
+
+# values.yaml
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 80
+
+image:
+  repository: your-docker-registry/springboot-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 443
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  tls:
+    enabled: true
+    secretName: your-tls-secret
+    hosts:
+      - your-domain.com
+
+ingress:
+  enabled: false
+
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "springboot-app.fullname" . }}
+  labels:
+    app: {{ include "springboot-app.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "springboot-app.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "springboot-app.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+      imagePullSecrets:
+        - name: your-docker-registry-secret
+
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "springboot-app.fullname" . }}
+  labels:
+    app: {{ include "springboot-app.name" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ include "springboot-app.name" . }}
+
+# ingress.yaml
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "springboot-app.fullname" . }}
+  labels:
+    app: {{ include "springboot-app.name" . }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  tls:
+    - hosts:
+        - your-domain.com
+      secretName: your-tls-secret
+  rules:
+    - host: your-domain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "springboot-app.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end -}}
+```
+
+In this Helm chart:
+
+- `values.yaml` defines the configurable parameters such as replica count, auto-scaling configuration, image repository, service type, TLS configuration, etc.
+- `deployment.yaml` creates a Kubernetes deployment for the Spring Boot application with the specified replica count and image repository.
+- `service.yaml` creates a Kubernetes service to expose the deployment.
+- `ingress.yaml` (optional) defines an Ingress resource to route traffic to the service with SSL termination.
+
+You'll need to replace placeholders like `your-docker-registry`, `your-tls-secret`, and `your-domain.com` with your actual values. Also, ensure you have a Docker registry, TLS secret, and DNS configured accordingly.
